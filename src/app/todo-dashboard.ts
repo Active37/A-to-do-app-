@@ -157,6 +157,14 @@ import { TodoService, Task } from './todo-service';
           </div>
           
           <div class="flex items-center gap-6">
+            <!-- Sandbox Workspace badge -->
+            @if (todoService.isSandboxAuth()) {
+              <div class="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100" title="Email signups are disabled in the project console. Seamless Sandbox active.">
+                <span class="material-icons text-base">cloud_done</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider">Sandbox Workspace Registry</span>
+              </div>
+            }
+
             <!-- Connection Sync State badge -->
             @if (isOnline()) {
               <div class="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">

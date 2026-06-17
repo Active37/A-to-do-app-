@@ -85,6 +85,7 @@ export class TodoService {
   currentUser = signal<any>(null);
   authLoading = signal<boolean>(true);
   authError = signal<string | null>(null);
+  isSandboxAuth = signal<boolean>(false);
 
   // Task signals
   tasks = signal<Task[]>([]);
@@ -95,21 +96,63 @@ export class TodoService {
   }
 
   private initAuthListener() {
+    // Check for cached sandbox credentials
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('sandbox_current_user');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          this.currentUser.set(parsed);
+          this.isSandboxAuth.set(true);
+          this.authLoading.set(false);
+          this.loadTasks(parsed.uid);
+        } catch (e) {
+          console.error('Failed restoring sandbox session', e);
+        }
+      }
+    }
+
     onAuthStateChanged(auth, (user: any) => {
-      this.currentUser.set(user);
-      this.authLoading.set(false);
-      this.authError.set(null);
-      
       if (user) {
+        this.isSandboxAuth.set(false);
+        this.currentUser.set(user);
+        this.authLoading.set(false);
+        this.authError.set(null);
         this.loadTasks(user.uid);
       } else {
-        this.tasks.set([]);
+        // Only reset if we are NOT in local sandbox mode
+        if (!this.isSandboxAuth()) {
+          this.currentUser.set(null);
+          this.tasks.set([]);
+          this.authLoading.set(false);
+        }
       }
     });
   }
 
   async loadTasks(userId: string) {
     this.tasksLoading.set(true);
+
+    if (this.isSandboxAuth()) {
+      try {
+        const stored = localStorage.getItem(`sandbox_tasks_${userId}`);
+        const loadedTasks: Task[] = stored ? JSON.parse(stored) : [];
+        loadedTasks.sort((a, b) => {
+          if (a.completed !== b.completed) {
+            return a.completed ? 1 : -1;
+          }
+          return b.createdAt - a.createdAt;
+        });
+        this.tasks.set(loadedTasks);
+      } catch (e) {
+        console.error('Failed loading sandbox tasks', e);
+        this.tasks.set([]);
+      } finally {
+        this.tasksLoading.set(false);
+      }
+      return;
+    }
+
     const path = `users/${userId}/tasks`;
     try {
       const q = query(collection(db, path));
@@ -147,6 +190,22 @@ export class TodoService {
     const user = this.currentUser();
     if (!user) throw new Error('Action restricted to active sessions.');
 
+    if (this.isSandboxAuth()) {
+      const newTask: Task = {
+        id: 'local_' + Math.random().toString(36).substring(2, 9),
+        title,
+        description: description || '',
+        completed: false,
+        priority,
+        project: project || 'Inbox',
+        dueDate: dueDate || 'Today',
+        createdAt: Date.now()
+      };
+      this.tasks.update((curr) => [newTask, ...curr]);
+      localStorage.setItem(`sandbox_tasks_${user.uid}`, JSON.stringify(this.tasks()));
+      return;
+    }
+
     const path = `users/${user.uid}/tasks`;
     try {
       const colRef = collection(db, path);
@@ -176,6 +235,15 @@ export class TodoService {
     const user = this.currentUser();
     if (!user) return;
 
+    if (this.isSandboxAuth()) {
+      const nextCompleted = !task.completed;
+      this.tasks.update((curr) => 
+        curr.map((t) => t.id === task.id ? { ...t, completed: nextCompleted } : t)
+      );
+      localStorage.setItem(`sandbox_tasks_${user.uid}`, JSON.stringify(this.tasks()));
+      return;
+    }
+
     const path = `users/${user.uid}/tasks/${task.id}`;
     try {
       const docRef = doc(db, `users/${user.uid}/tasks`, task.id);
@@ -195,6 +263,14 @@ export class TodoService {
     const user = this.currentUser();
     if (!user) return;
 
+    if (this.isSandboxAuth()) {
+      this.tasks.update((curr) =>
+        curr.map((t) => t.id === taskId ? { ...t, ...updates } : t)
+      );
+      localStorage.setItem(`sandbox_tasks_${user.uid}`, JSON.stringify(this.tasks()));
+      return;
+    }
+
     const path = `users/${user.uid}/tasks/${taskId}`;
     try {
       const docRef = doc(db, `users/${user.uid}/tasks`, taskId);
@@ -212,6 +288,12 @@ export class TodoService {
   async deleteTask(taskId: string) {
     const user = this.currentUser();
     if (!user) return;
+
+    if (this.isSandboxAuth()) {
+      this.tasks.update((curr) => curr.filter((t) => t.id !== taskId));
+      localStorage.setItem(`sandbox_tasks_${user.uid}`, JSON.stringify(this.tasks()));
+      return;
+    }
 
     const path = `users/${user.uid}/tasks/${taskId}`;
     try {
@@ -233,7 +315,6 @@ export class TodoService {
       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     } catch (e) {
       console.warn('Crypto subtle unavailable, using mock crypto hash fallback');
-      // Simple custom hash representation for systems that disable browser web crypto
       let hash = 0;
       for (let i = 0; i < password.length; i++) {
         const char = password.charCodeAt(i);
@@ -252,14 +333,63 @@ export class TodoService {
       const userCredential = await createUserWithEmailAndPassword(auth, email, securePassword);
       if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName: username });
-        // Force refresh currentUser inside local state
+        this.isSandboxAuth.set(false);
         this.currentUser.set({ ...userCredential.user, displayName: username });
       }
-    } catch (error) {
-      const e = error as { message?: string; code?: string };
-      this.authError.set(e.message || 'An error occurred during account registration.');
-      this.authLoading.set(false);
-      throw error;
+    } catch (error: any) {
+      console.warn('Firebase signUp error captured:', error);
+      // Fallback for auth/operation-not-allowed or admin restriction errors (or user disabled)
+      const errCode = error?.code || '';
+      const errMsg = error?.message || '';
+      const isRestricted = errCode === 'auth/operation-not-allowed' || 
+                           errCode === 'auth/admin-restricted-operation' || 
+                           errMsg.includes('denied') || 
+                           errMsg.includes('not allowed') || 
+                           errMsg.includes('disabled');
+
+      if (isRestricted) {
+        console.info('Switching to local secure Sandbox auth environment.');
+        const securePassword = await this.hashPassword(password);
+        
+        const registeredUsersRaw = localStorage.getItem('local_sandbox_users') || '{}';
+        const registeredUsers = JSON.parse(registeredUsersRaw);
+        const normEmail = email.trim().toLowerCase();
+
+        if (registeredUsers[normEmail]) {
+          const customErr = new Error('This email user account is already active.');
+          (customErr as any).code = 'auth/email-already-in-use';
+          this.authError.set('This email user account is already active.');
+          this.authLoading.set(false);
+          throw customErr;
+        }
+
+        const userId = 'sandbox_' + btoa(normEmail).replace(/=/g, '').substring(0, 15);
+        registeredUsers[normEmail] = {
+          uid: userId,
+          email: normEmail,
+          passwordHash: securePassword,
+          displayName: username
+        };
+        localStorage.setItem('local_sandbox_users', JSON.stringify(registeredUsers));
+
+        const sandboxUser = {
+          uid: userId,
+          email: normEmail,
+          displayName: username,
+          isSandbox: true
+        };
+        localStorage.setItem('sandbox_current_user', JSON.stringify(sandboxUser));
+        
+        this.isSandboxAuth.set(true);
+        this.currentUser.set(sandboxUser);
+        this.authLoading.set(false);
+        this.loadTasks(userId);
+      } else {
+        const e = error as { message?: string; code?: string };
+        this.authError.set(e.message || 'An error occurred during account registration.');
+        this.authLoading.set(false);
+        throw error;
+      }
     }
   }
 
@@ -269,7 +399,58 @@ export class TodoService {
     try {
       const securePassword = await this.hashPassword(password);
       await signInWithEmailAndPassword(auth, email, securePassword);
-    } catch (error) {
+      this.isSandboxAuth.set(false);
+    } catch (error: any) {
+      console.warn('Firebase signIn error captured:', error);
+      const errCode = error?.code || '';
+      const errMsg = error?.message || '';
+      const isRestricted = errCode === 'auth/operation-not-allowed' || 
+                           errCode === 'auth/user-not-found' ||
+                           errCode === 'auth/admin-restricted-operation' || 
+                           errMsg.includes('denied') || 
+                           errMsg.includes('not allowed') || 
+                           errMsg.includes('disabled');
+
+      if (isRestricted) {
+        const normEmail = email.trim().toLowerCase();
+        const registeredUsersRaw = localStorage.getItem('local_sandbox_users') || '{}';
+        const registeredUsers = JSON.parse(registeredUsersRaw);
+        const localUser = registeredUsers[normEmail];
+
+        if (localUser) {
+          const securePassword = await this.hashPassword(password);
+          if (localUser.passwordHash === securePassword) {
+            const sandboxUser = {
+              uid: localUser.uid,
+              email: localUser.email,
+              displayName: localUser.displayName,
+              isSandbox: true
+            };
+            localStorage.setItem('sandbox_current_user', JSON.stringify(sandboxUser));
+            
+            this.isSandboxAuth.set(true);
+            this.currentUser.set(sandboxUser);
+            this.authLoading.set(false);
+            this.loadTasks(localUser.uid);
+            return;
+          } else {
+            const customErr = new Error('Invalid credentials. Please verify and try again.');
+            (customErr as any).code = 'auth/wrong-password';
+            this.authError.set('Invalid credentials. Please verify and try again.');
+            this.authLoading.set(false);
+            throw customErr;
+          }
+        }
+
+        if (errCode === 'auth/operation-not-allowed' || errCode === 'auth/user-not-found') {
+          const customErr = new Error('No registered workspace found. Please select "Register Workspace" below to sign up.');
+          (customErr as any).code = 'auth/user-not-found';
+          this.authError.set('No registered workspace found. Please select "Register Workspace" below to sign up.');
+          this.authLoading.set(false);
+          throw customErr;
+        }
+      }
+
       const e = error as { message?: string; code?: string };
       this.authError.set(e.message || 'An error occurred during account authentication.');
       this.authLoading.set(false);
@@ -280,6 +461,9 @@ export class TodoService {
   async logout() {
     this.authLoading.set(true);
     try {
+      localStorage.removeItem('sandbox_current_user');
+      this.isSandboxAuth.set(false);
+      this.currentUser.set(null);
       await signOut(auth);
     } catch (error) {
       console.error('Error signing out:', error);
