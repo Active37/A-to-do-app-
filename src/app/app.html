@@ -1,1 +1,19 @@
-<router-outlet />
+@if (todoService.authLoading()) {
+  <!-- Clean Full-Screen Initializer Screen -->
+  <div class="min-h-screen flex flex-col items-center justify-center bg-zinc-50 space-y-4 p-4 text-center">
+    <div class="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+    <div class="space-y-1">
+      <h3 class="font-display font-semibold text-lg text-zinc-800">Initializing TaskFlow Workspace</h3>
+      <p class="text-zinc-500 text-sm">Synchronizing your credential profiles and secure cloud database instances...</p>
+    </div>
+  </div>
+} @else {
+  <div class="min-h-screen bg-zinc-50 text-zinc-900 selection:bg-indigo-500 selection:text-white">
+    @if (todoService.currentUser()) {
+      <app-todo-dashboard></app-todo-dashboard>
+    } @else {
+      <app-auth-gate></app-auth-gate>
+    }
+  </div>
+}
+

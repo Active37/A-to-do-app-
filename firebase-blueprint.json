@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "Task": {
+      "title": "Task",
+      "description": "Represents a to-do task item owned by a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique task identifier" },
+        "userId": { "type": "string", "description": "User identifier who owns this task" },
+        "title": { "type": "string", "description": "Dynamic task title" },
+        "description": { "type": "string", "description": "Optional task description content" },
+        "category": { "type": "string", "description": "Task category label" },
+        "priority": { "type": "string", "enum": ["high", "medium", "low"], "description": "Priority tier" },
+        "dueDate": { "type": "string", "description": "ISO timestamp for completion target date, or null" },
+        "completed": { "type": "boolean", "description": "Completion status flag" },
+        "createdAt": { "type": "string", "description": "ISO timestamp when the task was created" },
+        "completedAt": { "type": "string", "description": "ISO timestamp when the task was completed, or null" }
+      },
+      "required": ["id", "userId", "title", "category", "priority", "completed", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/todos/{todoId}": {
+      "schema": "Task",
+      "description": "Collection of tasks synchronized by users"
+    }
+  }
+}

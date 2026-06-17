@@ -1,0 +1,22 @@
+{
+  "short_name": "TaskFlow",
+  "name": "TaskFlow: Secure Cloud Todo",
+  "description": "Secure, fast, and gorgeous task manager with real-time cloud synchronization.",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/src/assets/images/checklist_icon_1781721042261.jpg",
+      "type": "image/jpeg",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#09090b",
+  "theme_color": "#6366f1",
+  "display": "standalone",
+  "orientation": "portrait"
+}
