@@ -9,6 +9,10 @@
           "type": "string",
           "description": "Brief description of the task."
         },
+        "description": {
+          "type": "string",
+          "description": "Detailed explanation of the task."
+        },
         "completed": {
           "type": "boolean",
           "description": "Indicates whether the task is checked off."
@@ -31,7 +35,7 @@
           "description": "Ephemeral database registration epoch timing."
         }
       },
-      "required": ["title", "completed", "priority", "project", "dueDate", "createdAt"]
+      "required": ["title", "description", "completed", "priority", "project", "dueDate", "createdAt"]
     }
   },
   "firestore": {

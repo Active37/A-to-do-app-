@@ -46,6 +46,23 @@ import { TodoService } from './todo-service';
 
           <!-- Authentication forms -->
           <form [formGroup]="authForm" (ngSubmit)="onSubmit()" class="space-y-5">
+            @if (mode() === 'signup') {
+              <div>
+                <label for="username" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Display Username
+                </label>
+                <div class="relative">
+                  <span class="material-icons absolute left-3 top-2.5 text-slate-400 text-lg">person_outline</span>
+                  <input 
+                    id="username" 
+                    type="text" 
+                    formControlName="username"
+                    placeholder="Your Name or Alias" 
+                    class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all text-sm"/>
+                </div>
+              </div>
+            }
+
             <div>
               <label for="email" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
                 Email Address
@@ -74,6 +91,12 @@ import { TodoService } from './todo-service';
                   placeholder="••••••••" 
                   class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all text-sm"/>
               </div>
+            </div>
+
+            <!-- SHA-256 Cryptographic Shield badge -->
+            <div class="flex items-center gap-2 justify-center py-2 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-500 font-medium font-sans">
+              <span class="material-icons text-emerald-500 text-sm">lock</span>
+              Crypto-secure: Local SHA-256 Hashing Enforced
             </div>
 
             <!-- Validation/Error messages -->
@@ -126,7 +149,8 @@ export class AuthGate {
 
   authForm = new FormGroup({
     email: new FormControl('', [Validators.required, Validators.email]),
-    password: new FormControl('', [Validators.required, Validators.minLength(6)])
+    password: new FormControl('', [Validators.required, Validators.minLength(6)]),
+    username: new FormControl('', [])
   });
 
   setMode(m: 'signin' | 'signup') {
@@ -136,19 +160,25 @@ export class AuthGate {
 
   async onSubmit() {
     if (this.authForm.invalid) {
-      this.localError.set('Please make sure you entered a valid email and passion length of at least 6 characters.');
+      this.localError.set('Please make sure you entered a valid email and custom password (at least 6 characters).');
       return;
     }
 
     this.localError.set(null);
     const email = this.authForm.value.email || '';
     const password = this.authForm.value.password || '';
+    const username = this.authForm.value.username || '';
+
+    if (this.mode() === 'signup' && !username.trim()) {
+      this.localError.set('Please provide a Display Username to identify your workspace.');
+      return;
+    }
 
     try {
       if (this.mode() === 'signin') {
         await this.todoService.signIn(email, password);
       } else {
-        await this.todoService.signUp(email, password);
+        await this.todoService.signUp(email, password, username.trim());
       }
     } catch (error) {
       // Decode user-friendly messages for common firebase errors

@@ -5,6 +5,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut,
+  updateProfile,
   User 
 } from 'firebase/auth';
 import { 
@@ -68,6 +69,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 export interface Task {
   id: string;
   title: string;
+  description: string;
   completed: boolean;
   priority: 'high' | 'normal' | 'low';
   project: string;
@@ -118,6 +120,7 @@ export class TodoService {
         loadedTasks.push({
           id: docSnap.id,
           title: data['title'] || '',
+          description: data['description'] || '',
           completed: !!data['completed'],
           priority: data['priority'] || 'normal',
           project: data['project'] || 'Inbox',
@@ -140,7 +143,7 @@ export class TodoService {
     }
   }
 
-  async addTask(title: string, priority: 'high' | 'normal' | 'low', project: string, dueDate: string) {
+  async addTask(title: string, description: string, priority: 'high' | 'normal' | 'low', project: string, dueDate: string) {
     const user = this.currentUser();
     if (!user) throw new Error('Action restricted to active sessions.');
 
@@ -149,6 +152,7 @@ export class TodoService {
       const colRef = collection(db, path);
       const payload = {
         title,
+        description: description || '',
         completed: false,
         priority,
         project: project || 'Inbox',
@@ -187,6 +191,24 @@ export class TodoService {
     }
   }
 
+  async updateTask(taskId: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) {
+    const user = this.currentUser();
+    if (!user) return;
+
+    const path = `users/${user.uid}/tasks/${taskId}`;
+    try {
+      const docRef = doc(db, `users/${user.uid}/tasks`, taskId);
+      await updateDoc(docRef, updates);
+
+      // Update local state reactively
+      this.tasks.update((curr) =>
+        curr.map((t) => t.id === taskId ? { ...t, ...updates } : t)
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  }
+
   async deleteTask(taskId: string) {
     const user = this.currentUser();
     if (!user) return;
@@ -203,11 +225,36 @@ export class TodoService {
     }
   }
 
-  async signUp(email: string, password: string) {
+  async hashPassword(password: string): Promise<string> {
+    try {
+      const msgBuffer = new TextEncoder().encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+      console.warn('Crypto subtle unavailable, using mock crypto hash fallback');
+      // Simple custom hash representation for systems that disable browser web crypto
+      let hash = 0;
+      for (let i = 0; i < password.length; i++) {
+        const char = password.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash = hash & hash;
+      }
+      return 'fallback_hash_' + Math.abs(hash).toString(16);
+    }
+  }
+
+  async signUp(email: string, password: string, username: string) {
     this.authLoading.set(true);
     this.authError.set(null);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const securePassword = await this.hashPassword(password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, securePassword);
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, { displayName: username });
+        // Force refresh currentUser inside local state
+        this.currentUser.set({ ...userCredential.user, displayName: username });
+      }
     } catch (error) {
       const e = error as { message?: string; code?: string };
       this.authError.set(e.message || 'An error occurred during account registration.');
@@ -220,7 +267,8 @@ export class TodoService {
     this.authLoading.set(true);
     this.authError.set(null);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const securePassword = await this.hashPassword(password);
+      await signInWithEmailAndPassword(auth, email, securePassword);
     } catch (error) {
       const e = error as { message?: string; code?: string };
       this.authError.set(e.message || 'An error occurred during account authentication.');

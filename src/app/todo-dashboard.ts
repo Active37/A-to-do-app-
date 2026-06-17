@@ -126,8 +126,8 @@ import { TodoService, Task } from './todo-service';
                 {{ userInitials() }}
               </div>
               <div class="flex flex-col min-w-0">
-                <span class="text-xs font-bold text-white truncate leading-none">{{ emailPrefix() }}</span>
-                <span class="text-[9px] text-slate-500 font-semibold mt-0.5">Alex Henderson</span>
+                <span class="text-xs font-bold text-white truncate leading-none">{{ username() }}</span>
+                <span class="text-[9px] text-slate-500 font-semibold mt-0.5">Secure Logged User</span>
               </div>
             </div>
             <button 
@@ -157,20 +157,27 @@ import { TodoService, Task } from './todo-service';
           </div>
           
           <div class="flex items-center gap-6">
-            <!-- Security Session Badge -->
-            <div class="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
-              <span class="material-icons text-base">verified_user</span>
-              <span class="text-[10px] font-bold uppercase tracking-wider">Secure Session Active</span>
-            </div>
+            <!-- Connection Sync State badge -->
+            @if (isOnline()) {
+              <div class="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                <span class="material-icons text-base animate-pulse">wifi</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider">Online Sync Active</span>
+              </div>
+            } @else {
+              <div class="flex items-center gap-2 text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-150 animate-bounce">
+                <span class="material-icons text-base animate-pulse">wifi_off</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider">Offline Cache Mode</span>
+              </div>
+            }
 
             <!-- Profile Info panel -->
             <div class="flex items-center gap-3 border-l border-slate-200 pl-6">
               <div class="text-right">
-                <div class="text-xs font-bold text-slate-900">Alex Henderson</div>
-                <div class="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Enterprise account</div>
+                <div class="text-xs font-bold text-slate-900">{{ username() }}</div>
+                <div class="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Authenticated account</div>
               </div>
               <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-xs border border-slate-200 shadow-sm uppercase">
-                AH
+                {{ userInitials() }}
               </div>
             </div>
           </div>
@@ -194,20 +201,28 @@ import { TodoService, Task } from './todo-service';
             <!-- Quick Add Form Panel -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
               <form [formGroup]="addTaskForm" (ngSubmit)="onAddTask()" class="space-y-3">
-                <div class="flex gap-2">
-                  <input 
-                    type="text" 
-                    formControlName="title"
-                    class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs leading-normal bg-slate-50 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all" 
-                    placeholder="Describe a task key responsibility to complete..."/>
+                <div class="space-y-2">
+                  <div class="flex gap-2 font-sans">
+                    <input 
+                      type="text" 
+                      formControlName="title"
+                      class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs leading-normal bg-slate-50 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-semibold" 
+                      placeholder="Task Title (e.g. Conduct Code Review)"/>
+                    
+                    <button 
+                      type="submit" 
+                      [disabled]="addTaskForm.invalid"
+                      class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-45 disabled:cursor-not-allowed transition-all text-white px-5 py-2 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm shrink-0">
+                      <span class="material-icons text-sm">add</span>
+                      Add Task
+                    </button>
+                  </div>
                   
-                  <button 
-                    type="submit" 
-                    [disabled]="addTaskForm.invalid"
-                    class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-45 disabled:cursor-not-allowed transition-all text-white px-5 py-2 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm shrink-0">
-                    <span class="material-icons text-sm">add</span>
-                    Add Task
-                  </button>
+                  <textarea 
+                    formControlName="description"
+                    rows="2"
+                    class="block w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none"
+                    placeholder="Task Explanation / notes (optional)..."></textarea>
                 </div>
 
                 <div class="grid grid-cols-3 gap-3 pt-1">
@@ -284,15 +299,23 @@ import { TodoService, Task } from './todo-service';
                         }
                       </button>
 
-                      <div class="min-w-0">
+                      <div class="min-w-0 flex-1">
                         <p 
                           [class.line-through]="task.completed"
                           [class.text-slate-400]="task.completed"
-                          class="font-semibold text-xs text-slate-800 truncate leading-normal transition-all">
+                          class="font-bold text-sm text-slate-800 leading-normal transition-all">
                           {{ task.title }}
                         </p>
+                        @if (task.description) {
+                          <p 
+                            [class.line-through]="task.completed"
+                            [class.text-slate-400]="task.completed"
+                            class="text-xs text-slate-500 mt-1 whitespace-pre-wrap leading-relaxed max-w-xl">
+                            {{ task.description }}
+                          </p>
+                        }
                         
-                        <div class="flex items-center gap-2 mt-1">
+                        <div class="flex items-center gap-2 mt-2">
                           <span class="text-[9px] uppercase font-bold text-slate-500">{{ task.project }}</span>
                           <span class="w-1 h-1 rounded-full bg-slate-300"></span>
                           <span 
@@ -309,6 +332,13 @@ import { TodoService, Task } from './todo-service';
                         <span class="material-icons text-sm">schedule</span>
                         <span class="text-[10px] font-semibold uppercase">{{ task.dueDate }}</span>
                       </div>
+
+                      <button 
+                        (click)="openEditModal(task)"
+                        title="Edit Task Specs"
+                        class="text-slate-400 hover:text-indigo-600 p-1 rounded-lg hover:bg-slate-100 transition-all">
+                        <span class="material-icons text-base">edit</span>
+                      </button>
 
                       <button 
                         (click)="todoService.deleteTask(task.id)"
@@ -390,6 +420,95 @@ import { TodoService, Task } from './todo-service';
               <div class="absolute -bottom-10 -left-10 w-24 h-24 bg-emerald-600/10 rounded-full blur-xl"></div>
             </div>
 
+            <!-- Sleek Inline Task Edit Modal Overlay -->
+            @if (selectedTaskToEdit()) {
+              <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 overflow-hidden relative">
+                  <!-- Modal Header -->
+                  <div class="bg-slate-900 text-white p-5 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons text-indigo-400">edit_note</span>
+                      <strong class="text-sm font-sans tracking-wider uppercase">Modify Workspace Task</strong>
+                    </div>
+                    <button (click)="closeEditModal()" class="text-slate-400 hover:text-white transition-all">
+                      <span class="material-icons">close</span>
+                    </button>
+                  </div>
+
+                  <!-- Modal Body Form -->
+                  <form [formGroup]="editTaskForm" (ngSubmit)="onSaveEditedTask()" class="p-6 space-y-4">
+                    <div>
+                      <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Task Title</label>
+                      <input 
+                        type="text" 
+                        formControlName="title"
+                        class="block w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs leading-normal placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-semibold" />
+                    </div>
+
+                    <div>
+                      <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Task Explanation / notes</label>
+                      <textarea 
+                        formControlName="description"
+                        rows="3"
+                        class="block w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs leading-normal placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 resize-none"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                      <div>
+                        <label class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Project Space</label>
+                        <select 
+                          formControlName="project"
+                          class="block w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-700 focus:outline-none">
+                          <option value="Inbox">Inbox</option>
+                          <option value="Engineering">Engineering</option>
+                          <option value="Marketing">Marketing</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Priority</label>
+                        <select 
+                          formControlName="priority"
+                          class="block w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-700 focus:outline-none">
+                          <option value="high">🔥 High</option>
+                          <option value="normal">⚡ Normal</option>
+                          <option value="low">🌱 Low</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Due Timeline</label>
+                        <select 
+                          formControlName="dueDate"
+                          class="block w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-700 focus:outline-none">
+                          <option value="Today">Today</option>
+                          <option value="Tomorrow">Tomorrow</option>
+                          <option value="Next Week">Next Week</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Modal Actions -->
+                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                      <button 
+                        type="button" 
+                        (click)="closeEditModal()"
+                        class="px-4 py-2 bg-slate-100 hover:bg-slate-200 transition-all rounded-lg text-xs font-semibold text-slate-700 uppercase">
+                        Dismiss
+                      </button>
+                      <button 
+                        type="submit"
+                        [disabled]="editTaskForm.invalid"
+                        class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 transition-all rounded-lg text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                        <span class="material-icons text-sm">save</span>
+                        Save Changes
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            }
+
             <!-- Recent activity trails -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <h3 class="font-bold text-slate-900 text-xs uppercase tracking-wider">Security Access Journal</h3>
@@ -424,14 +543,40 @@ import { TodoService, Task } from './todo-service';
 export class TodoDashboard {
   todoService = inject(TodoService);
 
+  // Online / Offline synchronization state
+  isOnline = signal<boolean>(typeof window !== 'undefined' ? navigator.onLine : true);
+
+  // Edit Task State
+  selectedTaskToEdit = signal<Task | null>(null);
+
+  @HostListener('window:online')
+  onWindowOnline() {
+    this.isOnline.set(true);
+  }
+
+  @HostListener('window:offline')
+  onWindowOffline() {
+    this.isOnline.set(false);
+  }
+
   // Filters state
   currentFilter = signal<'all' | 'today' | 'completed'>('all');
   currentProjectFilter = signal<string | null>(null);
   searchControl = new FormControl('');
 
-  // Form controls
+  // Form controls with description added
   addTaskForm = new FormGroup({
     title: new FormControl('', [Validators.required, Validators.minLength(2)]),
+    description: new FormControl(''),
+    priority: new FormControl<'high' | 'normal' | 'low'>('normal', [Validators.required]),
+    project: new FormControl('Inbox', [Validators.required]),
+    dueDate: new FormControl('Today', [Validators.required])
+  });
+
+  // Edit task form controls
+  editTaskForm = new FormGroup({
+    title: new FormControl('', [Validators.required, Validators.minLength(2)]),
+    description: new FormControl(''),
     priority: new FormControl<'high' | 'normal' | 'low'>('normal', [Validators.required]),
     project: new FormControl('Inbox', [Validators.required]),
     dueDate: new FormControl('Today', [Validators.required])
@@ -448,10 +593,16 @@ export class TodoDashboard {
     return user.email.split('@')[0];
   });
 
+  username = computed(() => {
+    const user = this.todoService.currentUser();
+    if (!user) return 'User Workspace';
+    return user.displayName || user.email?.split('@')[0] || 'User Workspace';
+  });
+
   userInitials = computed(() => {
-    const prefix = this.emailPrefix();
-    if (prefix === 'User Workspace') return 'UW';
-    return prefix.substring(0, 2).toUpperCase();
+    const name = this.username();
+    if (name === 'User Workspace') return 'UW';
+    return name.substring(0, 2).toUpperCase();
   });
 
   // Filtered task counts
@@ -521,14 +672,48 @@ export class TodoDashboard {
 
     const val = this.addTaskForm.value;
     const title = val.title || '';
+    const description = val.description || '';
     const priority = val.priority as 'high' | 'normal' | 'low';
     const project = val.project || 'Inbox';
     const dueDate = val.dueDate || 'Today';
 
-    this.todoService.addTask(title, priority, project, dueDate).then(() => {
-      this.addTaskForm.patchValue({ title: '' }); // reset only title
+    this.todoService.addTask(title, description, priority, project, dueDate).then(() => {
+      this.addTaskForm.patchValue({ title: '', description: '' }); // reset title and description
     }).catch(err => {
       alert('Error creating task in session: ' + err.message);
+    });
+  }
+
+  openEditModal(task: Task) {
+    this.selectedTaskToEdit.set(task);
+    this.editTaskForm.setValue({
+      title: task.title,
+      description: task.description || '',
+      priority: task.priority,
+      project: task.project || 'Inbox',
+      dueDate: task.dueDate || 'Today'
+    });
+  }
+
+  closeEditModal() {
+    this.selectedTaskToEdit.set(null);
+  }
+
+  onSaveEditedTask() {
+    const task = this.selectedTaskToEdit();
+    if (!task || this.editTaskForm.invalid) return;
+
+    const val = this.editTaskForm.value;
+    this.todoService.updateTask(task.id, {
+      title: val.title || '',
+      description: val.description || '',
+      priority: val.priority as 'high' | 'normal' | 'low',
+      project: val.project || 'Inbox',
+      dueDate: val.dueDate || 'Today'
+    }).then(() => {
+      this.closeEditModal();
+    }).catch(err => {
+      alert('Error saving modified task state: ' + err.message);
     });
   }
 

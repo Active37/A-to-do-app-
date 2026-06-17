@@ -18,9 +18,10 @@ service cloud.firestore {
 
     // Entity validation helper
     function isValidTask(data) {
-      return data.keys().hasAll(['title', 'completed', 'priority', 'project', 'dueDate', 'createdAt'])
-        && data.keys().size() == 6
+      return data.keys().hasAll(['title', 'description', 'completed', 'priority', 'project', 'dueDate', 'createdAt'])
+        && data.keys().size() == 7
         && data.title is string && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 1000
         && data.completed is bool
         && data.priority is string && (data.priority == 'high' || data.priority == 'normal' || data.priority == 'low')
         && data.project is string && data.project.size() <= 120
@@ -42,8 +43,7 @@ service cloud.firestore {
         && request.auth.uid == userId 
         && isValidId(taskId) 
         && isValidTask(request.resource.data)
-        && request.resource.data.createdAt == resource.data.createdAt
-        && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed']));
+        && request.resource.data.createdAt == resource.data.createdAt;
 
       allow delete: if isSignedIn() 
         && request.auth.uid == userId 
