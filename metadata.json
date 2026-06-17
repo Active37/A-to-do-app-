@@ -1,0 +1,6 @@
+{
+  "name": "Todo App",
+  "description": "A fully functional, secure, and installable Todo App with task prioritization, categorization, offline reliability, and account synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
