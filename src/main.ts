@@ -1,5 +1,12 @@
-import {bootstrapApplication} from '@angular/platform-browser';
-import {App} from './app/app';
-import {appConfig} from './app/app.config';
+import { bootstrapApplication } from '@angular/platform-browser';
+import { provideRouter } from '@angular/router';
+import { provideExperimentalZonelessChangeDetection } from '@angular/core';
+import { App } from './app/app';
 
-bootstrapApplication(App, appConfig).catch((err) => console.error(err));
+// Dynamic route routing configuration or routing stubs
+bootstrapApplication(App, {
+  providers: [
+    provideExperimentalZonelessChangeDetection(),
+    provideRouter([])
+  ]
+}).catch(err => console.error(err));

@@ -5,243 +5,205 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut,
-  User
+  User 
 } from 'firebase/auth';
 import { 
   collection, 
-  query, 
-  where, 
-  onSnapshot, 
+  getDocs, 
   addDoc, 
   updateDoc, 
   deleteDoc, 
-  doc
+  doc,
+  query,
+  where
 } from 'firebase/firestore';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid || null,
+      email: auth.currentUser?.email || null,
+      emailVerified: auth.currentUser?.emailVerified || null,
+      isAnonymous: auth.currentUser?.isAnonymous || null,
+      tenantId: auth.currentUser?.tenantId || null,
+      providerInfo: auth.currentUser?.providerData?.map((provider: any) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export interface Task {
   id: string;
-  userId: string;
   title: string;
-  description: string;
-  category: string;
-  priority: 'high' | 'medium' | 'low';
-  dueDate: string | null;
   completed: boolean;
-  createdAt: string;
-  completedAt: string | null;
+  priority: 'high' | 'normal' | 'low';
+  project: string;
+  dueDate: string;
+  createdAt: number;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class TodoService {
-  // Authentication State Signals
-  currentUser = signal<User | null>(null);
+  // Authentication signals
+  currentUser = signal<any>(null);
   authLoading = signal<boolean>(true);
   authError = signal<string | null>(null);
-  
-  // Todo Items State Signals
-  todos = signal<Task[]>([]);
-  todosLoading = signal<boolean>(false);
-  
-  // Filters and Searching Signals
-  searchQuery = signal<string>('');
-  categoryFilter = signal<string>('All');
-  priorityFilter = signal<string>('All');
-  statusFilter = signal<string>('All'); // 'All' | 'Pending' | 'Completed'
-  sortBy = signal<'dueDate' | 'priority' | 'createdAt'>('createdAt');
 
-  private unsubscribeTodos: (() => void) | null = null;
+  // Task signals
+  tasks = signal<Task[]>([]);
+  tasksLoading = signal<boolean>(false);
 
   constructor() {
-    // Monitor Auth State Changes
-    if (auth) {
-      onAuthStateChanged(auth, (user) => {
-        this.currentUser.set(user);
-        this.authLoading.set(false);
-        this.authError.set(null);
-        
-        if (user) {
-          this.subscribeToTodos(user.uid);
-        } else {
-          this.clearTodosSubscription();
-        }
-      }, (error) => {
-        this.authError.set(error.message);
-        this.authLoading.set(false);
-      });
-    } else {
-      this.authLoading.set(false);
-    }
+    this.initAuthListener();
   }
 
-  // real-time Firestore synchronization subscription
-  private subscribeToTodos(userId: string) {
-    if (!db) return;
-    this.todosLoading.set(true);
-    this.clearTodosSubscription();
+  private initAuthListener() {
+    onAuthStateChanged(auth, (user: any) => {
+      this.currentUser.set(user);
+      this.authLoading.set(false);
+      this.authError.set(null);
+      
+      if (user) {
+        this.loadTasks(user.uid);
+      } else {
+        this.tasks.set([]);
+      }
+    });
+  }
 
-    const todosCol = collection(db, 'todos');
-    const q = query(todosCol, where('userId', '==', userId));
-
-    this.unsubscribeTodos = onSnapshot(q, (snapshot) => {
-      const items: Task[] = [];
-      snapshot.forEach((docSnap) => {
+  async loadTasks(userId: string) {
+    this.tasksLoading.set(true);
+    const path = `users/${userId}/tasks`;
+    try {
+      const q = query(collection(db, path));
+      const querySnapshot = await getDocs(q);
+      const loadedTasks: Task[] = [];
+      querySnapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
-        items.push({
+        loadedTasks.push({
           id: docSnap.id,
-          userId: data['userId'] || '',
           title: data['title'] || '',
-          description: data['description'] || '',
-          category: data['category'] || 'General',
-          priority: data['priority'] || 'medium',
-          dueDate: data['dueDate'] || null,
           completed: !!data['completed'],
-          createdAt: data['createdAt'] || new Date().toISOString(),
-          completedAt: data['completedAt'] || null,
+          priority: data['priority'] || 'normal',
+          project: data['project'] || 'Inbox',
+          dueDate: data['dueDate'] || '',
+          createdAt: data['createdAt'] || Date.now()
         });
       });
-      this.todos.set(items);
-      this.todosLoading.set(false);
-    }, (error) => {
-      console.error('Firestore snapshot subscription error:', error);
-      this.todosLoading.set(false);
-    });
+      // Sort: incomplete first, then by date/createdAt descending
+      loadedTasks.sort((a, b) => {
+        if (a.completed !== b.completed) {
+          return a.completed ? 1 : -1;
+        }
+        return b.createdAt - a.createdAt;
+      });
+      this.tasks.set(loadedTasks);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, path);
+    } finally {
+      this.tasksLoading.set(false);
+    }
   }
 
-  private clearTodosSubscription() {
-    if (this.unsubscribeTodos) {
-      this.unsubscribeTodos();
-      this.unsubscribeTodos = null;
-    }
-    this.todos.set([]);
-  }
-
-  // --- Filter and Sort Core Computations (Using Signals) ---
-  filteredAndSortedTodos = computed(() => {
-    let list = this.todos();
-
-    // 1. Filter by Completion Status
-    const status = this.statusFilter();
-    if (status === 'Pending') {
-      list = list.filter(t => !t.completed);
-    } else if (status === 'Completed') {
-      list = list.filter(t => t.completed);
-    }
-
-    // 2. Filter by Category
-    const category = this.categoryFilter();
-    if (category !== 'All') {
-      list = list.filter(t => t.category === category);
-    }
-
-    // 3. Filter by Priority
-    const priority = this.priorityFilter();
-    if (priority !== 'All') {
-      list = list.filter(t => t.priority.toLowerCase() === priority.toLowerCase());
-    }
-
-    // 4. Search Filter
-    const queryStr = this.searchQuery().trim().toLowerCase();
-    if (queryStr) {
-      list = list.filter(t => 
-        t.title.toLowerCase().includes(queryStr) || 
-        t.description.toLowerCase().includes(queryStr)
-      );
-    }
-
-    // 5. Sort
-    const sortField = this.sortBy();
-    list = [...list].sort((a, b) => {
-      if (sortField === 'dueDate') {
-        const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
-        const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
-        return dateA - dateB;
-      } else if (sortField === 'priority') {
-        const priorityWeight = { high: 3, medium: 2, low: 1 };
-        return priorityWeight[b.priority] - priorityWeight[a.priority];
-      } else {
-        // Default: createdAt descending (newest first)
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
-    });
-
-    return list;
-  });
-
-  // Unique category list computed signal
-  availableCategories = computed(() => {
-    const defaultCats = ['Personal', 'Work', 'Shopping', 'Health', 'General'];
-    const customCats = this.todos().map(t => t.category);
-    const set = new Set([...defaultCats, ...customCats]);
-    return Array.from(set).filter(Boolean);
-  });
-
-  // Stats Counters
-  stats = computed(() => {
-    const list = this.todos();
-    const total = list.length;
-    const completed = list.filter(t => t.completed).length;
-    const pending = total - completed;
-    const rate = total === 0 ? 0 : Math.round((completed / total) * 100);
-
-    const priorities = { high: 0, medium: 0, low: 0 };
-    list.forEach(t => {
-      if (!t.completed && t.priority in priorities) {
-        priorities[t.priority]++;
-      }
-    });
-
-    return { total, completed, pending, rate, priorities };
-  });
-
-  // --- Core CRUD Actions ---
-  async addTask(task: Omit<Task, 'id' | 'userId' | 'createdAt' | 'completedAt'>) {
+  async addTask(title: string, priority: 'high' | 'normal' | 'low', project: string, dueDate: string) {
     const user = this.currentUser();
-    if (!user || !db) return;
+    if (!user) throw new Error('Action restricted to active sessions.');
 
+    const path = `users/${user.uid}/tasks`;
     try {
-      const todoData = {
-        ...task,
-        userId: user.uid,
-        createdAt: new Date().toISOString(),
-        completedAt: null
+      const colRef = collection(db, path);
+      const payload = {
+        title,
+        completed: false,
+        priority,
+        project: project || 'Inbox',
+        dueDate: dueDate || 'Today',
+        createdAt: Date.now()
       };
-      await addDoc(collection(db, 'todos'), todoData);
-    } catch (e) {
-      console.error('Error adding document into Firestore:', e);
-      throw e;
+      const docRef = await addDoc(colRef, payload);
+      
+      // Update local state reactively
+      const newTask: Task = {
+        id: docRef.id,
+        ...payload
+      };
+      this.tasks.update((curr) => [newTask, ...curr]);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
     }
   }
 
-  async updateTask(taskId: string, updates: Partial<Omit<Task, 'id' | 'userId' | 'createdAt'>>) {
-    if (!db) return;
+  async toggleTask(task: Task) {
+    const user = this.currentUser();
+    if (!user) return;
+
+    const path = `users/${user.uid}/tasks/${task.id}`;
     try {
-      if (updates.completed !== undefined) {
-        updates.completedAt = updates.completed ? new Date().toISOString() : null;
-      }
-      const taskDocRef = doc(db, 'todos', taskId);
-      await updateDoc(taskDocRef, updates);
-    } catch (e) {
-      console.error('Error updating document in Firestore:', e);
-      throw e;
+      const docRef = doc(db, `users/${user.uid}/tasks`, task.id);
+      const nextCompleted = !task.completed;
+      await updateDoc(docRef, { completed: nextCompleted });
+
+      // Update local state reactively
+      this.tasks.update((curr) => 
+        curr.map((t) => t.id === task.id ? { ...t, completed: nextCompleted } : t)
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   }
 
   async deleteTask(taskId: string) {
-    if (!db) return;
+    const user = this.currentUser();
+    if (!user) return;
+
+    const path = `users/${user.uid}/tasks/${taskId}`;
     try {
-      const taskDocRef = doc(db, 'todos', taskId);
-      await deleteDoc(taskDocRef);
-    } catch (e) {
-      console.error('Error deleting document from Firestore:', e);
-      throw e;
+      const docRef = doc(db, `users/${user.uid}/tasks`, taskId);
+      await deleteDoc(docRef);
+
+      // Update local state reactively
+      this.tasks.update((curr) => curr.filter((t) => t.id !== taskId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   }
 
-  // --- Auth Functionality ---
   async signUp(email: string, password: string) {
-    if (!auth) return;
     this.authLoading.set(true);
     this.authError.set(null);
     try {
@@ -255,7 +217,6 @@ export class TodoService {
   }
 
   async signIn(email: string, password: string) {
-    if (!auth) return;
     this.authLoading.set(true);
     this.authError.set(null);
     try {
@@ -269,7 +230,6 @@ export class TodoService {
   }
 
   async logout() {
-    if (!auth) return;
     this.authLoading.set(true);
     try {
       await signOut(auth);

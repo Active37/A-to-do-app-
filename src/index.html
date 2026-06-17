@@ -1,31 +1,17 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>TaskFlow: Secure Cloud Todo</title>
-    <base href="/" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/x-icon" href="favicon.ico" />
-    
-    <!-- PWA Settings -->
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="TaskFlow" />
-    <link rel="apple-touch-icon" href="/src/assets/images/checklist_icon_1781721042261.jpg" />
-
-    <!-- Service Worker Registration -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then((reg) => console.log('Service Worker registered successfully!', reg.scope))
-            .catch((err) => console.warn('Service Worker registration failed:', err));
-        });
-      }
-    </script>
-  </head>
-  <body class="bg-zinc-950 text-zinc-100 min-h-screen">
-    <app-root></app-root>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <title>TaskFlow Pro</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="https://cdn.jsdelivr.net/npm/heroicons/24/solid/check-circle.svg">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased font-sans h-screen overflow-hidden">
+  <app-root></app-root>
+</body>
 </html>

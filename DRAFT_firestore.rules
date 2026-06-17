@@ -30,8 +30,8 @@ service cloud.firestore {
 
     // Matches users subcollection
     match /users/{userId}/tasks/{taskId} {
-      allow get: if isSignedIn() && request.auth.uid == userId && isValidId(taskId);
-      allow list: if isSignedIn() && request.auth.uid == userId;
+      // 8. Query Enforcer - protect lists and gets
+      allow get, list: if isSignedIn() && request.auth.uid == userId;
 
       allow create: if isSignedIn() 
         && request.auth.uid == userId 

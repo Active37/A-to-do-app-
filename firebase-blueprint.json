@@ -2,27 +2,42 @@
   "entities": {
     "Task": {
       "title": "Task",
-      "description": "Represents a to-do task item owned by a user",
+      "description": "A single to-do task item within personal project spaces.",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Unique task identifier" },
-        "userId": { "type": "string", "description": "User identifier who owns this task" },
-        "title": { "type": "string", "description": "Dynamic task title" },
-        "description": { "type": "string", "description": "Optional task description content" },
-        "category": { "type": "string", "description": "Task category label" },
-        "priority": { "type": "string", "enum": ["high", "medium", "low"], "description": "Priority tier" },
-        "dueDate": { "type": "string", "description": "ISO timestamp for completion target date, or null" },
-        "completed": { "type": "boolean", "description": "Completion status flag" },
-        "createdAt": { "type": "string", "description": "ISO timestamp when the task was created" },
-        "completedAt": { "type": "string", "description": "ISO timestamp when the task was completed, or null" }
+        "title": {
+          "type": "string",
+          "description": "Brief description of the task."
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Indicates whether the task is checked off."
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["high", "normal", "low"],
+          "description": "The urgency tier of this task."
+        },
+        "project": {
+          "type": "string",
+          "description": "The custom workspace or project name classification."
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "The active calendar timeline target deadline."
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Ephemeral database registration epoch timing."
+        }
       },
-      "required": ["id", "userId", "title", "category", "priority", "completed", "createdAt"]
+      "required": ["title", "completed", "priority", "project", "dueDate", "createdAt"]
     }
   },
   "firestore": {
-    "/todos/{todoId}": {
+    "/users/{userId}/tasks/{taskId}": {
       "schema": "Task",
-      "description": "Collection of tasks synchronized by users"
+      "description": "Collection storing task items allocated strictly of individual authenticated users."
     }
   }
 }
